@@ -10,6 +10,9 @@ You can train the model with ```python main.py --mode train --dataroot "\path to
 
 ![image](https://github.com/user-attachments/assets/8263f0b8-87e8-4412-9cfd-a727da3e30e8)
 
+![image](https://github.com/user-attachments/assets/cdfdca49-d7f3-4b37-9778-180eefe5cb14)
+
+
 
 You can test the model with ```python main.py --mode test --dataroot "\path to folder\dataset\"```. The results will be stored in the results folder. The folder will have a test_200_iter200 folder, which will contain an index.html file, which you can open in chrome to see the test results.
 
