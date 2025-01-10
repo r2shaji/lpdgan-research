@@ -11,3 +11,4 @@ pyyaml>=6.0
 yacs>=0.1.8
 timm>=0.9.12
 einops>=0.7.0
+ultralytics

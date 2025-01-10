@@ -23,6 +23,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--name', default='LPDGAN', type=str)
     parser.add_argument('--dataroot', type=str, default=r'')
+    parser.add_argument('--ocr_model_path', type=str, default=r'')
     parser.add_argument('--mode', default='train', choices=['train', 'test'], type=str)
     parser.add_argument('--gpu_ids', type=str, default='0')
     parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints')
@@ -31,11 +32,11 @@ if __name__ == '__main__':
     parser.add_argument('--ndf', type=int, default=64)
 
     # Train
-    parser.add_argument('--batch_size', type=int, default=5)
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--weight_decay', type=float, default=0)
     parser.add_argument('--load_iter', type=int, default=200)
-    parser.add_argument('--epoch', type=int, default=200)
-    parser.add_argument('--print_freq', type=int, default=10400)
+    parser.add_argument('--epoch', type=int, default=100)
+    parser.add_argument('--print_freq', type=int, default=2000)
     parser.add_argument('--num_worker', type=int, default=0)
     parser.add_argument('--save_latest_freq', type=int, default=5000)
     parser.add_argument('--save_epoch_freq', type=int, default=5)

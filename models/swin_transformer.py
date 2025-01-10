@@ -1146,10 +1146,8 @@ class SwinTransformerSys(nn.Module):
 
             else:
                 if inx == 1:
-                    self.plate_num2 = self.CNN_block2(x)
                     self.y2 = self.MBO2(x)
                 elif inx == 2:
-                    self.plate_num1 = self.CNN_block1(x)
                     self.y1 = self.MBO1(x)
                 x = layer_up(x)
 
@@ -1174,7 +1172,7 @@ class SwinTransformerSys(nn.Module):
         x = self.forward_up_features(x)
         x = self.up_x4(x)
 
-        return x, self.y1, self.y2, self.y3, self.plate_num1, self.plate_num2
+        return x, self.y1, self.y2, self.y3
 
     def flops(self):
         flops = 0

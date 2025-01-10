@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
+import numpy as np
 import functools
 from torch.optim import lr_scheduler
 import torchvision.models as models
 import torchvision.transforms as transforms
 from models.swin_transformer import SwinTransformerSys
+from ultralytics.utils.metrics import bbox_iou
 import copy
 
 def get_scheduler(optimizer, opt):
@@ -128,8 +130,8 @@ class SwinTransformer_Backbone(nn.Module):
     def forward(self, x, x1, x2, x3):
         if x.size()[1] == 1:
             x = x.repeat(1,3,1,1)
-        y, y1, y2, y3, p1, p2 = self.swin_unet(x, x1, x2, x3)
-        return y, y1, y2, y3, p1, p2
+        y, y1, y2, y3 = self.swin_unet(x, x1, x2, x3)
+        return y, y1, y2, y3
 
     def unfreeze(self):
         for param in self.inception.parameters():
@@ -228,3 +230,108 @@ class PixelDiscriminator(nn.Module):
 
     def forward(self, input):
         return self.net(input)
+    
+
+class CIoULoss(nn.Module):
+    def __init__(self, eps=1e-7):
+        super(CIoULoss, self).__init__()
+        self.eps = eps
+
+    def sort_bbox(self, bbox):
+        return sorted(bbox, key=lambda x: x[0])
+
+    def get_loss(self, pred_boxes, true_boxes, ciou_threshold=0.2):
+
+        max_loss = 1
+        if len(pred_boxes) == 0:
+            return max_loss
+
+        pred_boxes = torch.stack(pred_boxes)
+        true_boxes = torch.stack(true_boxes)
+        pred_boxes = pred_boxes.float().to(pred_boxes.device)
+        true_boxes = true_boxes.float().to(true_boxes.device)
+
+        total_ciou = []
+
+        for true_box in true_boxes:
+            ciou_scores = bbox_iou(true_box,pred_boxes, xywh=True, CIoU=True)
+            best_ciou = ciou_scores.max()
+            if best_ciou < ciou_threshold:
+                best_ciou = 0
+            total_ciou.append(best_ciou)
+
+        total_ciou = np.array(total_ciou)
+        ciou_loss =  (1-total_ciou).mean().item()
+
+        return ciou_loss
+    
+    def __call__(self, pred_results, true_boxes):
+        sorted_pred_boxes = self.sort_bbox(pred_results[0].boxes.xywhn)
+        return self.get_loss(sorted_pred_boxes, true_boxes)
+
+
+class CELoss(nn.Module):
+    def __init__(self, eps=1e-7):
+        super(CELoss, self).__init__()
+        self.eps = eps
+
+    def select_indices_target_boxes(self, pred_boxes, true_boxes, ciou_threshold=0.3):
+
+        matched_indices = {}
+        if len(pred_boxes) == 0:
+            return matched_indices
+
+        pred_boxes = torch.stack(pred_boxes)
+        true_boxes = torch.stack(true_boxes)
+        pred_boxes = pred_boxes.float().to(pred_boxes.device)
+        true_boxes = true_boxes.float().to(true_boxes.device)
+
+        for idx, pred_box in enumerate(pred_boxes):
+            ciou_scores = bbox_iou(pred_box,true_boxes, xywh=True, CIoU=True)
+            best_ciou= ciou_scores.max()
+            matched_idx = torch.argmax(ciou_scores)
+            if best_ciou > ciou_threshold:
+                matched_indices[idx] = matched_idx.item()
+
+        return matched_indices
+    
+    def sort_bbox(self, bbox):
+        return sorted(bbox, key=lambda x: x[0])
+    
+    def sort_class_log_prob(self,boxes, log_prob):
+        x1_coordinates = boxes[:, 0]
+        sorted_indices = torch.argsort(x1_coordinates)
+        sorted_log_prob = log_prob[0][sorted_indices]
+        sorted_log_prob = torch.log(sorted_log_prob.clamp(min=1e-12))
+        return sorted_log_prob
+    
+    def find_corresponding_correct_label(self,matched_indices,sorted_labels):
+        relevant_indices = list(matched_indices.values())
+        relevant_values = sorted_labels[relevant_indices]
+        return relevant_values
+    
+    def select_relevant_log_prob(self,sorted_class_log_prob,matched_indices):
+        relevant_indices = list(matched_indices.keys())
+        relevant_values = sorted_class_log_prob[relevant_indices]
+        return relevant_values
+
+    def get_loss(self, log_probs, true_cls, epsilon, loss_cls_max=3.58):
+        max_loss = 1
+        if len(log_probs)<1 or len(true_cls)<1:
+            return max_loss * len(true_cls)
+
+        ce_loss = nn.CrossEntropyLoss(reduction='mean')
+        loss_cls = ce_loss(log_probs, true_cls)
+        loss_cls = min(loss_cls.item() / loss_cls_max, 1.0)
+        return loss_cls
+    
+    def __call__(self, predicted_results, plate_info, epsilon=1e-9):
+        sorted_class_log_prob = self.sort_class_log_prob(predicted_results.boxes.xywh, predicted_results.class_logits)
+        sorted_fake_B_PlateNum = self.sort_bbox(predicted_results.boxes.xywhn)
+        matched_indices = self.select_indices_target_boxes(sorted_fake_B_PlateNum, plate_info["sorted_boxes_xywhn"])
+        print("matched_indices",matched_indices)
+        mapped_labels = self.find_corresponding_correct_label(matched_indices,plate_info["sorted_labels"][0])
+        mapped_labels = mapped_labels.long()
+        relevant_log_prob = self.select_relevant_log_prob(sorted_class_log_prob,matched_indices)
+        print("mapped_labels",mapped_labels)
+        return self.get_loss(relevant_log_prob, mapped_labels, epsilon)
