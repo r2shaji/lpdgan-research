@@ -4,6 +4,8 @@ Dataset link - https://uofwaterloo-my.sharepoint.com/:u:/g/personal/r2shaji_uwat
 
 Venv link - https://uofwaterloo-my.sharepoint.com/:u:/g/personal/r2shaji_uwaterloo_ca/EYrwbqyn81VNn1YQljam_bcBIWxjdDagPTlk_Wrb8b2rvw?e=8oUyrF - Copy the venv folder to the code and run it 
 
+New Venv Link with the modified yolo codebase with necessary changes to run the modified LPDGAN changes - https://uofwaterloo-my.sharepoint.com/:u:/g/personal/r2shaji_uwaterloo_ca/EY3khjuP351IrapY7nz_KvEBkvRBqHklnWNJ_aC9j4yBlw?e=94Gfas - Copy the venv folder to the code and run it 
+
 or ``` pip install -r requirements.txt``` to create the environment.
 
 You can train the model with ```python main.py --mode train --dataroot "\path to folder\dataset\"```. The checkpoints will be stored in checkpoints folder. This folder will contain an LPDGAN folder which will have a log_loss.txt which stores the training loss information.
