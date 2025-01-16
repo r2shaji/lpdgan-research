@@ -315,17 +315,20 @@ class CELoss(nn.Module):
         relevant_values = sorted_class_log_prob[relevant_indices]
         return relevant_values
 
-    def get_loss(self, log_probs, true_cls, epsilon, loss_cls_max=3.58):
+    def get_loss(self, log_probs, true_cls, num_missed_boxes, epsilon, loss_cls_max=3.58):
         max_loss = 1
         if len(log_probs)<1 or len(true_cls)<1:
             return max_loss * len(true_cls)
+        
+        missed_box_loss = max_loss * num_missed_boxes
 
         ce_loss = nn.CrossEntropyLoss(reduction='mean')
         loss_cls = ce_loss(log_probs, true_cls)
-        loss_cls = min(loss_cls.item() / loss_cls_max, 1.0)
+        loss_cls = min((loss_cls.item() + missed_box_loss) / loss_cls_max, 1.0)
         return loss_cls
     
     def __call__(self, predicted_results, plate_info, epsilon=1e-9):
+        max_loss = 1
         sorted_class_log_prob = self.sort_class_log_prob(predicted_results.boxes.xywh, predicted_results.class_logits)
         sorted_fake_B_PlateNum = self.sort_bbox(predicted_results.boxes.xywhn)
         matched_indices = self.select_indices_target_boxes(sorted_fake_B_PlateNum, plate_info["sorted_boxes_xywhn"])
@@ -334,4 +337,7 @@ class CELoss(nn.Module):
         mapped_labels = mapped_labels.long()
         relevant_log_prob = self.select_relevant_log_prob(sorted_class_log_prob,matched_indices)
         print("mapped_labels",mapped_labels)
-        return self.get_loss(relevant_log_prob, mapped_labels, epsilon)
+        if len(mapped_labels)<1:
+            return max_loss
+        num_missed_boxes = abs(len(plate_info["sorted_labels"][0]) - len(mapped_labels))
+        return self.get_loss(relevant_log_prob, mapped_labels, num_missed_boxes, epsilon)

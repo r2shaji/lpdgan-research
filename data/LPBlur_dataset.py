@@ -16,7 +16,7 @@ class LPBlurDataset(Dataset):
     def __init__(self, opt):
         super(LPBlurDataset, self).__init__()
         self.opt = opt
-        self.label_dir_path = os.path.join(opt.dataroot, opt.mode, 'label')
+        self.label_dir_path = os.path.join(opt.dataroot, opt.mode, 'labels')
         self.files_a = os.path.join(opt.dataroot, opt.mode, 'blur')
         self.files_b = os.path.join(opt.dataroot, opt.mode, 'sharp')
 
@@ -87,7 +87,7 @@ class LPBlurDataset(Dataset):
         return dataloader
     
     def load_label(self, image_path, label_dir_path):
-        label_file_name = os.path.basename(image_path).split(".")[0] + ".txt"
+        label_file_name = os.path.basename(image_path).replace('.jpg', '.txt')
         label_file_path = os.path.join(label_dir_path,label_file_name)
         with open(label_file_path, 'r') as f:
             lines = f.readlines()

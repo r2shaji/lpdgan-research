@@ -216,10 +216,10 @@ class LPDGAN(nn.Module):
         resize_transform = transforms.Resize((256, 256))
 
         # Apply the transform to each image in the batch
-        self.fake_B = resize_transform(self.fake_B)
+        fake_B = resize_transform(self.fake_B)
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        fake_B_PlateNum = self.ocr_model.predict(self.fake_B,device = device)
+        fake_B_PlateNum = self.ocr_model.predict(fake_B,device = device)
         
         print('self.plate_info["sorted_boxes_xywhn"]:',self.plate_info["sorted_boxes_xywhn"])
         loss_CIoU_Plate = self.CIoULoss(fake_B_PlateNum,self.plate_info["sorted_boxes_xywhn"])
@@ -230,7 +230,7 @@ class LPDGAN(nn.Module):
 
         print("loss_CE:",loss_CE)
 
-        self.loss_PlateNum_L1 = loss_CIoU_Plate + loss_CE
+        self.loss_PlateNum_L1 = 0.5 * loss_CIoU_Plate + 0.5 * loss_CE
 
         self.loss_G = self.loss_G_GAN + self.loss_G_s + self.loss_G_L1 + self.loss_P_loss + 0.1 * self.loss_PlateNum_L1
         self.loss_G.backward()
@@ -292,6 +292,13 @@ class LPDGAN(nn.Module):
             if isinstance(name, str):
                 errors_ret[name] = float(
                     getattr(self, 'loss_' + name))
+        return errors_ret
+    
+    def get_new_loss_dict(self):
+        errors_ret = OrderedDict()
+        for name in self.loss_names:
+            if isinstance(name, str):
+                errors_ret[name] = float(0)
         return errors_ret
 
     def save_networks(self, epoch):

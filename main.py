@@ -59,7 +59,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_test', type=int, default=1000, help='how many test images to run')
 
     # For display
-    parser.add_argument('--display_freq', type=int, default=10400, help='frequency of showing training results on screen')
+    parser.add_argument('--display_freq', type=int, default=1000, help='frequency of showing training results on screen')
     parser.add_argument('--display_ncols', type=int, default=3,
                         help='if positive, display all images in a single visdom web panel with certain number of images per row.')
     parser.add_argument('--display_id', type=int, default=1, help='window id of the web display')

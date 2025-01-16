@@ -19,6 +19,7 @@ def trainer(opt):
         epoch_start_time = time.time()
         iter_data_time = time.time()
         epoch_iter = 0
+        sum_epoch_losses = model.get_new_loss_dict()
         visualizer.reset()
         model.update_learning_rate()
         for i, data in enumerate(dataset):
@@ -30,6 +31,10 @@ def trainer(opt):
             epoch_iter += opt.batch_size
             model.set_input(data)
             model.optimize_parameters()
+
+            losses = model.get_current_losses()
+            for key in losses:
+                sum_epoch_losses[key] += losses[key]
 
             if total_iters % opt.display_freq == 0:
                 save_result = total_iters % opt.update_html_freq == 0
@@ -52,3 +57,8 @@ def trainer(opt):
             model.save_networks(epoch)
 
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.n_epochs + opt.n_epochs_decay, time.time() - epoch_start_time))
+
+        for key in sum_epoch_losses:
+            sum_epoch_losses[key] /= total_iters
+
+        visualizer.save_epoch_losses(epoch,sum_epoch_losses)

@@ -2,6 +2,7 @@ import numpy as np
 import os
 import ntpath
 import time
+import csv
 from . import util, html
 
 def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
@@ -69,6 +70,8 @@ class Visualizer():
             now = time.strftime("%c")
             log_file.write('================ Training Loss (%s) ================\n' % now)
 
+        self.csv_file_name = os.path.join(opt.checkpoints_dir, opt.name, 'loss_log.csv')
+
     def reset(self):
         """Reset the self.saved status"""
         self.saved = False
@@ -82,6 +85,7 @@ class Visualizer():
             epoch (int) - - the current epoch
             save_result (bool) - - if save the current results to an HTML file
         """
+        label_name_mapping = {"real_A":"Sharp_Im","fake_B":"Generated_Im","real_B":"Blur_Im"}
         if self.display_id > 0:  # show images in the browser using visdom
             ncols = self.ncols
             if ncols > 0:        # show all the images in one visdom panel
@@ -92,7 +96,8 @@ class Visualizer():
                 idx = 0
                 for label, image in visuals.items():
                     image_numpy = util.tensor2im(image)
-                    label_html_row += '<td>%s</td>' % label
+                    
+                    label_html_row += '<td>%s</td>' % label_name_mapping[label]
                     images.append(image_numpy.transpose([2, 0, 1]))
                     idx += 1
                     if idx % ncols == 0:
@@ -124,7 +129,7 @@ class Visualizer():
                     image_numpy = util.tensor2im(image)
                     img_path = 'epoch%.3d_%s.png' % (n, label)
                     ims.append(img_path)
-                    txts.append(label)
+                    txts.append(label_name_mapping[label])
                     links.append(img_path)
                 webpage.add_images(ims, txts, links, width=self.win_size)
             webpage.save()
@@ -147,5 +152,23 @@ class Visualizer():
         print(message)  # print the message
         with open(self.log_name, "a") as log_file:
             log_file.write('%s\n' % message)  # save the message
+
+    # losses: same format as |losses| of plot_current_losses
+    def save_epoch_losses(self, epoch, losses):
+        """save current losses to a csv file
+
+        Parameters:
+            epoch (int) -- current epoch
+            losses (OrderedDict) -- training losses stored in the format of (name, float) pairs
+        """
+        file_exists = os.path.exists(self.csv_file_name)
+        losses_with_epoch = {'Epoch': epoch, **losses}
+        with open(self.csv_file_name, mode='a', newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=losses_with_epoch.keys())
             
+            # Write the header only if the file doesn't exist
+            if not file_exists:
+                writer.writeheader()
             
+            # Write the data
+            writer.writerow(losses_with_epoch)
