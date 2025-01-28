@@ -38,6 +38,10 @@ class LPDGAN(nn.Module):
         self.CIoULoss = networks.CIoULoss()
         self.CELoss = networks.CELoss()
 
+        self.plateNumIsAccurate = networks.PlateNumAccurate()
+
+        self.loss_Is_Accurate = 0
+
         if self.mode == 'train':
             self.model_names = ['G', 'D', 'D_smallblock', 'D1', 'D2']
             self.netD = NLayerDiscriminator(opt.input_nc + opt.output_nc, opt.ndf, n_layers=3, norm_layer=functools.partial(nn.BatchNorm2d, affine=True, track_running_stats=True)).to(self.device)
@@ -46,7 +50,7 @@ class LPDGAN(nn.Module):
 
             self.netD_smallblock = PixelDiscriminator(opt.input_nc, opt.ndf, norm_layer=functools.partial(nn.BatchNorm2d, affine=True, track_running_stats=True)).to(self.device)
 
-            self.loss_names = ['G_GAN', 'G_L1', 'PlateNum_L1', 'D_GAN', 'P_loss', 'D_real', 'D_fake', 'D_s']
+            self.loss_names = ['G_GAN', 'G_L1', 'PlateNum_L1', 'D_GAN', 'P_loss', 'D_real', 'D_fake', 'D_s','Is_Accurate']
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)
             self.criterionGAN_s = networks.GANLoss('lsgan').to(self.device)
 
@@ -213,9 +217,10 @@ class LPDGAN(nn.Module):
         
         # print("loss_PlateNum_L1",self.loss_PlateNum_L1)
 
+
+
         resize_transform = transforms.Resize((256, 256))
 
-        # Apply the transform to each image in the batch
         fake_B = resize_transform(self.fake_B)
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -231,6 +236,9 @@ class LPDGAN(nn.Module):
         print("loss_CE:",loss_CE)
 
         self.loss_PlateNum_L1 = 0.5 * loss_CIoU_Plate + 0.5 * loss_CE
+
+        self.loss_Is_Accurate = self.plateNumIsAccurate(fake_B_PlateNum[0],self.plate_info)
+
 
         self.loss_G = self.loss_G_GAN + self.loss_G_s + self.loss_G_L1 + self.loss_P_loss + 0.1 * self.loss_PlateNum_L1
         self.loss_G.backward()

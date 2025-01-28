@@ -341,3 +341,58 @@ class CELoss(nn.Module):
             return max_loss
         num_missed_boxes = abs(len(plate_info["sorted_labels"][0]) - len(mapped_labels))
         return self.get_loss(relevant_log_prob, mapped_labels, num_missed_boxes, epsilon)
+    
+
+class PlateNumAccurate(nn.Module):
+    def __init__(self, eps=1e-7):
+        super(PlateNumAccurate, self).__init__()
+        self.eps = eps
+
+    def sort_bbox(self, bbox):
+        return sorted(bbox, key=lambda x: x[0])
+    
+    def select_indices_target_boxes(self, pred_boxes, true_boxes, ciou_threshold=0.3):
+
+        matched_indices = {}
+        if len(pred_boxes) == 0:
+            return matched_indices
+
+        pred_boxes = torch.stack(pred_boxes)
+        true_boxes = torch.stack(true_boxes)
+        pred_boxes = pred_boxes.float().to(pred_boxes.device)
+        true_boxes = true_boxes.float().to(true_boxes.device)
+
+        for idx, pred_box in enumerate(pred_boxes):
+            ciou_scores = bbox_iou(pred_box,true_boxes, xywh=True, CIoU=True)
+            best_ciou= ciou_scores.max()
+            matched_idx = torch.argmax(ciou_scores)
+            if best_ciou > ciou_threshold:
+                matched_indices[idx] = matched_idx.item()
+
+        return matched_indices
+    
+    def find_corresponding_correct_label(self,matched_indices,sorted_labels):
+        relevant_indices = list(matched_indices.values())
+        relevant_values = sorted_labels[relevant_indices]
+        return relevant_values
+
+
+    def __call__(self, pred_boxes, plate_info):
+        if len(pred_boxes.boxes.xywhn) != len(plate_info["sorted_boxes_xywhn"]):
+            return 0
+        
+        sorted_fake_B_PlateNum = self.sort_bbox(pred_boxes.boxes.xywhn)
+        matched_indices = self.select_indices_target_boxes(sorted_fake_B_PlateNum, plate_info["sorted_boxes_xywhn"])
+
+        if len(matched_indices) != len(plate_info["sorted_labels"][0]):
+            return 0
+        
+        mapped_labels = self.find_corresponding_correct_label(matched_indices,plate_info["sorted_labels"][0])
+        mapped_labels = mapped_labels.long()
+
+        if torch.equal(mapped_labels,plate_info["sorted_labels"][0]):
+            return 1
+        
+        return 0
+
+        

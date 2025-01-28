@@ -85,7 +85,7 @@ class Visualizer():
             epoch (int) - - the current epoch
             save_result (bool) - - if save the current results to an HTML file
         """
-        label_name_mapping = {"real_A":"Sharp_Im","fake_B":"Generated_Im","real_B":"Blur_Im"}
+        label_name_mapping = {"real_B":"Sharp_Im","fake_B":"Generated_Im","real_A":"Blur_Im"}
         if self.display_id > 0:  # show images in the browser using visdom
             ncols = self.ncols
             if ncols > 0:        # show all the images in one visdom panel

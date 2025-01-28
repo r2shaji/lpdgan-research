@@ -59,6 +59,8 @@ def trainer(opt):
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.n_epochs + opt.n_epochs_decay, time.time() - epoch_start_time))
 
         for key in sum_epoch_losses:
+            if key == "Is_Accurate":
+                continue
             sum_epoch_losses[key] /= total_iters
 
         visualizer.save_epoch_losses(epoch,sum_epoch_losses)
