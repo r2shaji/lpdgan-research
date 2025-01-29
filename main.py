@@ -24,6 +24,7 @@ if __name__ == '__main__':
     parser.add_argument('--name', default='LPDGAN', type=str)
     parser.add_argument('--dataroot', type=str, default=r'')
     parser.add_argument('--ocr_model_path', type=str, default=r'')
+    parser.add_argument('--feature_extractor_model_path', type=str, default=r'')
     parser.add_argument('--mode', default='train', choices=['train', 'test'], type=str)
     parser.add_argument('--gpu_ids', type=str, default='0')
     parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints')

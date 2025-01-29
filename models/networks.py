@@ -6,6 +6,7 @@ from torch.optim import lr_scheduler
 import torchvision.models as models
 import torchvision.transforms as transforms
 from models.swin_transformer import SwinTransformerSys
+from ultralytics import YOLO
 from ultralytics.utils.metrics import bbox_iou
 import copy
 
@@ -231,6 +232,14 @@ class PixelDiscriminator(nn.Module):
     def forward(self, input):
         return self.net(input)
     
+class TextBoxClassifier(nn.Module):
+
+    def __init__(self):
+        super(TextBoxClassifier, self).__init__()
+
+    def forward(self, features):
+        return 0
+    
 
 class CIoULoss(nn.Module):
     def __init__(self, eps=1e-7):
@@ -395,4 +404,14 @@ class PlateNumAccurate(nn.Module):
         
         return 0
 
-        
+class FeatureExtractor(nn.Module):
+    def __init__(self,model_path):
+        super(FeatureExtractor, self).__init__()
+        self.model = YOLO(model_path)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    def forward(self, fake_B):
+        results= self.model.predict(fake_B,device = self.device, embed=[4,12,18])
+        return results[0]
+
+    

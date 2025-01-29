@@ -1,12 +1,13 @@
 import torch
 from models import networks
-from models.networks import NLayerDiscriminator, PixelDiscriminator, SwinTransformer_Backbone
+from models.networks import NLayerDiscriminator, PixelDiscriminator, SwinTransformer_Backbone, TextBoxClassifier
 import functools
 import sys
 from collections import OrderedDict
 from ultralytics import YOLO
 from torchvision import transforms
 import os
+from data import aug
 import torch.nn as nn
 from models.config_su import get_config_or
 sys.path.append("..")
@@ -42,6 +43,8 @@ class LPDGAN(nn.Module):
 
         self.loss_Is_Accurate = 0
 
+        self.features = None
+
         if self.mode == 'train':
             self.model_names = ['G', 'D', 'D_smallblock', 'D1', 'D2']
             self.netD = NLayerDiscriminator(opt.input_nc + opt.output_nc, opt.ndf, n_layers=3, norm_layer=functools.partial(nn.BatchNorm2d, affine=True, track_running_stats=True)).to(self.device)
@@ -49,6 +52,8 @@ class LPDGAN(nn.Module):
             self.netD2 = NLayerDiscriminator(opt.input_nc + opt.output_nc, opt.ndf, n_layers=3, norm_layer=functools.partial(nn.BatchNorm2d, affine=True, track_running_stats=True)).to(self.device)
 
             self.netD_smallblock = PixelDiscriminator(opt.input_nc, opt.ndf, norm_layer=functools.partial(nn.BatchNorm2d, affine=True, track_running_stats=True)).to(self.device)
+
+            self.netD_textbox_classifier = TextBoxClassifier()
 
             self.loss_names = ['G_GAN', 'G_L1', 'PlateNum_L1', 'D_GAN', 'P_loss', 'D_real', 'D_fake', 'D_s','Is_Accurate']
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)
@@ -165,6 +170,8 @@ class LPDGAN(nn.Module):
         pred_real2 = self.netD2(real_AB2)
         loss_D_real2 = self.criterionGAN(pred_real2, True)
 
+        self.value = self.netD_textbox_classifier(self.features)
+
         self.loss_D_fake = (loss_D_fake + loss_D_fake1 + loss_D_fake2) / 3
         self.loss_D_real = (loss_D_real + loss_D_real1 + loss_D_real2) / 3
 
@@ -210,18 +217,17 @@ class LPDGAN(nn.Module):
         loss_P_loss3 = self.perceptualLoss(self.fake_B3, self.real_B3)
 
         self.loss_P_loss = (loss_P_loss + loss_P_loss1 + loss_P_loss2 + loss_P_loss3) / 4 * 0.01 
-        # print("criterionL1_plate1",self.criterionL1(self.plate1, self.plate_info))
-        # print("criterionL1_plate2",self.criterionL1(self.plate2, self.plate_info))
-        # self.loss_PlateNum_L1 = (self.criterionL1(self.plate1, self.plate_info) + self.criterionL1(self.plate2,
-        #                                                                                            self.plate_info)) / 2 * 0.01
-        
-        # print("loss_PlateNum_L1",self.loss_PlateNum_L1)
 
+        # resize_transform = transforms.Resize((256, 256))
 
+        # fake_B = resize_transform(self.fake_B)
 
-        resize_transform = transforms.Resize((256, 256))
+        transform = transforms.Compose([
+            transforms.Lambda(lambda img: aug.pad_to_size(img[0], required_size=(256, 256))),
+            transforms.ToTensor(),
+        ])
 
-        fake_B = resize_transform(self.fake_B)
+        fake_B = transform(self.fake_B)
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         fake_B_PlateNum = self.ocr_model.predict(fake_B,device = device)
@@ -238,6 +244,10 @@ class LPDGAN(nn.Module):
         self.loss_PlateNum_L1 = 0.5 * loss_CIoU_Plate + 0.5 * loss_CE
 
         self.loss_Is_Accurate = self.plateNumIsAccurate(fake_B_PlateNum[0],self.plate_info)
+
+
+        # results = self.ocr_model.predict(fake_B,device = device, embed=[4,12,18]) 
+        # self.features = results[0]
 
 
         self.loss_G = self.loss_G_GAN + self.loss_G_s + self.loss_G_L1 + self.loss_P_loss + 0.1 * self.loss_PlateNum_L1
