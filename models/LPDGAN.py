@@ -1,6 +1,6 @@
 import torch
 from models import networks
-from models.networks import NLayerDiscriminator, PixelDiscriminator, SwinTransformer_Backbone, TextBoxClassifier
+from models.networks import NLayerDiscriminator, PixelDiscriminator, SwinTransformer_Backbone, TextBoxClassifier, FeatureExtractor
 import functools
 import sys
 from collections import OrderedDict
@@ -53,6 +53,7 @@ class LPDGAN(nn.Module):
 
             self.netD_smallblock = PixelDiscriminator(opt.input_nc, opt.ndf, norm_layer=functools.partial(nn.BatchNorm2d, affine=True, track_running_stats=True)).to(self.device)
 
+            self.feature_extractor = FeatureExtractor(opt.feature_extractor_model_path)
             self.netD_textbox_classifier = TextBoxClassifier()
 
             self.loss_names = ['G_GAN', 'G_L1', 'PlateNum_L1', 'D_GAN', 'P_loss', 'D_real', 'D_fake', 'D_s','Is_Accurate']
@@ -246,8 +247,8 @@ class LPDGAN(nn.Module):
         self.loss_Is_Accurate = self.plateNumIsAccurate(fake_B_PlateNum[0],self.plate_info)
 
 
-        # results = self.ocr_model.predict(fake_B,device = device, embed=[4,12,18]) 
-        # self.features = results[0]
+        results = self.feature_extractor(fake_B) 
+        self.features = results[0]
 
 
         self.loss_G = self.loss_G_GAN + self.loss_G_s + self.loss_G_L1 + self.loss_P_loss + 0.1 * self.loss_PlateNum_L1
