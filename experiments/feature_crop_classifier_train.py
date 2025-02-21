@@ -106,7 +106,7 @@ def load_image_features(embed_layers= [6,15,21]):
         image = Image.open(image_path)
         ground_truth = load_label(image_path)
         true_boxes = ground_truth["sorted_boxes_xywhn"]
-        im_ht, im_wid = image.width, image.height
+        im_wid, im_ht = image.width, image.height
 
         results = model.predict(image_path, embed=embed_layers) 
         cropped_char_features = [[] for _ in range(len(true_boxes))]
