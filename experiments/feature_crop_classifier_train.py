@@ -11,6 +11,9 @@ import cv2, os, re, glob
 import torchvision.ops as ops
 import seaborn as sns
 from PIL import Image
+import matplotlib.patches as patches
+from pathlib import Path
+import math
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 IMAGE_FOLDER = r"D:\Users\r2shaji\Downloads\ocr_28102028\train\sharp"
@@ -70,30 +73,97 @@ def load_label(image_path):
     ground_truth = { "sorted_labels": sorted_labels, "sorted_boxes_xywhn":sorted_boxes}
     return ground_truth
 
-def crop_features(feature_map, bbox, im_ht, im_wid, output_size=(10, 10)):
+def plot_and_save_cropped_feature_map(cropped_feats, plot_image_name):
 
-    # xmin, ymin, xmax, ymax = bbox
-    # _, C, H, W = feature_map.shape
-    # xmin_feat = xmin * W
-    # ymin_feat = ymin * H
-    # xmax_feat = xmax * W
-    # ymax_feat = ymax * H
+    B, C, H, W = cropped_feats.shape
+    if B != 1:
+        print("Warning: This function expects a single batch (B=1). Taking the first element.")
 
-    # xmin_feat = max(0, xmin_feat)
-    # ymin_feat = max(0, ymin_feat)
-    # xmax_feat = min(W, xmax_feat)
-    # ymax_feat = min(H, ymax_feat)
+    fm = cropped_feats[0]
 
-    xmin_feat, ymin_feat, xmax_feat, ymax_feat = xywhn_to_xyxy(bbox, im_ht, im_wid)
+    n = C  
+    rows = math.ceil(n / 8)
+    cols = min(n, 8)
+
+    fig, ax = plt.subplots(rows, cols, figsize=(2*cols, 2*rows))
+    ax = ax.ravel() if n > 1 else [ax]  
+
+    for i in range(n):
+        ax[i].axis('off')
+        ax[i].imshow(fm[i].cpu().numpy(), cmap='gray')
+        ax[i].set_title(f"Channel {i}")
+
+    for j in range(n, len(ax)):
+        ax[j].axis('off')
+
+    plt.tight_layout()
+    fig.savefig(plot_image_name, dpi=fig.dpi)
+    plt.close(fig)
+
+
+def crop_features(feature_map, bbox, output_size=(10, 10)):
+
+    _, _, height, width = feature_map.shape
+
+    xmin_feat, ymin_feat, xmax_feat, ymax_feat = xywhn_to_xyxy(bbox, height, width)
 
     boxes = torch.tensor([[0, xmin_feat, ymin_feat, xmax_feat, ymax_feat]], device=feature_map.device,  dtype=torch.float)
 
-    cropped_feature = ops.roi_align(feature_map, boxes, output_size=output_size, spatial_scale=1.0, sampling_ratio=-1, aligned=True)
-    # cropped_feature = feature_map[:, :, ymin_feat:ymax_feat, xmin_feat:xmax_feat]
+    # cropped_feature = ops.roi_align(feature_map, boxes, output_size=output_size, spatial_scale=1.0, sampling_ratio=-1, aligned=True)
+    cropped_feature = feature_map[:, :, ymin_feat:ymax_feat, xmin_feat:xmax_feat]
+    _, _, cropped_feature_height, cropped_feature_width = cropped_feature.shape
+    cropped_feature_height, cropped_feature_width = int(cropped_feature_height), int(cropped_feature_width)
+    
+    print("cropped_feature_height, cropped_feature_width",cropped_feature_height, cropped_feature_width)
+    if cropped_feature_width == 0 or cropped_feature_height == 0:
+        if cropped_feature_width == 0:
+            xmin_feat = xmin_feat-1 if xmin_feat>=0 else 0
+            xmax_feat = xmax_feat+1 if xmax_feat<=width else width
+        if cropped_feature_height == 0:
+            ymin_feat = ymin_feat-1 if ymin_feat>=0 else 0
+            ymax_feat = ymax_feat+1 if ymax_feat<=height else height
+        cropped_feature = feature_map[:, :, ymin_feat:ymax_feat, xmin_feat:xmax_feat]
     
     return cropped_feature
 
-def load_image_features(embed_layers= [6,15,21]):
+def feature_visualization(x, im_ht, im_wid, bbox, stage, n=4, save_dir=Path("feature_plots")):
+     print("stage",stage)
+
+     if isinstance(x, torch.Tensor):
+        
+        _, channels, height, width = x.shape  # batch, channels, height, width
+        if height > 1 and width > 1:
+            f = f"{save_dir}/{stage}_features.png"
+
+            # Chunk the tensor into individual channel blocks
+            blocks = torch.chunk(x[0].cpu(), channels, dim=0)
+            n = min(n, channels)  # number of channels to plot
+
+            # Create subplots; here, we use 8 columns.
+            fig, ax = plt.subplots(math.ceil(n / 4), 4, tight_layout=True)
+            ax = ax.ravel()
+            plt.subplots_adjust(wspace=0.05, hspace=0.05)
+            
+            for i in range(n):
+                print("blocks[i]",blocks[i].shape)
+                ax[i].imshow(blocks[i].squeeze())
+
+                if bbox is not None:
+                    for each_bbox in bbox:
+                        xmin, ymin, xmax, ymax = xywhn_to_xyxy(each_bbox, height, width)
+                        rect_width = xmax - xmin
+                        rect_height = ymax - ymin
+                        rect = patches.Rectangle((xmin, ymin), rect_width, rect_height,
+                                                linewidth=1, edgecolor='r', facecolor='none')
+                        ax[i].add_patch(rect)
+                
+                ax[i].axis("off")
+
+            plt.savefig(f, dpi=300, bbox_inches="tight")
+            plt.close()
+
+
+def load_image_features(embed_layers= [1,2,3,4]):
 
     image_paths = sorted(
     glob.glob(os.path.join(IMAGE_FOLDER, "*.jpg")) 
@@ -103,24 +173,50 @@ def load_image_features(embed_layers= [6,15,21]):
     true_labels = []
 
     for image_path in image_paths:
+        image_name = os.path.basename(image_path).split(".")[0]
         image = Image.open(image_path)
         ground_truth = load_label(image_path)
         true_boxes = ground_truth["sorted_boxes_xywhn"]
-        im_ht, im_wid = image.width, image.height
+        im_wid, im_ht = image.width, image.height
+
+        
+
+        to_tensor = transforms.ToTensor()
+        image = to_tensor(image).unsqueeze(0)
 
         results = model.predict(image_path, embed=embed_layers) 
         cropped_char_features = [[] for _ in range(len(true_boxes))]
 
-        for feature in results:
+        k=0
+        for diff_layer_feature in results:
+            k+=1
+            # feature_visualization(diff_layer_feature, im_ht, im_wid, true_boxes, f"{image_name}_stage_{k}")
             for i, bbox in enumerate(true_boxes):
-                cropped_feats = crop_features(feature, bbox, im_ht, im_wid)
+                label = label_names[ground_truth["sorted_labels"][i].item()]
+                # plot_image_name = f'feature_crops/{image_name}_{i}_{label}.png'
+                cropped_feats = crop_features(diff_layer_feature, bbox)
+                # plot_and_save_cropped_feature_map(cropped_feats, plot_image_name)
+                print("cropped_feats before pooling shape",cropped_feats.shape)
+                # print("cropped_feats before pooling",cropped_feats)
                 cropped_feats = nn.functional.adaptive_avg_pool2d(cropped_feats, (1, 1)).squeeze(-1).squeeze(-1)
-                print("cropped_feats",cropped_feats)
-                print("label",ground_truth["sorted_labels"][i].item())
+                print("cropped_feats after pooling shape",cropped_feats.shape)
+                if torch.isnan(cropped_feats).any():
+                    print("Tensor has NaN values.", cropped_feats)
+                    print("image name",image_name)
+                print("label",label)
                 cropped_char_features[i].append(cropped_feats)
+
+        # for i, bbox in enumerate(true_boxes):
+        #     cropped_image = crop_features(image, bbox, im_ht, im_wid)
+        #     flattened = nn.functional.adaptive_avg_pool2d(cropped_image, (1, 1)).squeeze(-1).squeeze(-1)
+        #     # print("flattened", flattened.shape)
+        #     cropped_char_features[i].append(flattened)
+
 
         for i, char_embeddings in enumerate(cropped_char_features):
             cropped_char_features[i] = torch.unbind(torch.cat(char_embeddings, 1), dim=0)[0].squeeze(0)
+            # print("cropped_feats",cropped_char_features[i])
+            print("cropped_feats",cropped_char_features[i].shape)
             all_features.append(cropped_char_features[i])
             true_labels.append(ground_truth["sorted_labels"][i].item())
 
@@ -221,7 +317,7 @@ def main():
     torch.manual_seed(42)
 
     # Configuration
-    embed_layers = [6, 15, 21]
+    embed_layers = [1,2,3,4]
 
     X, y = load_image_features(embed_layers)
     
@@ -229,7 +325,7 @@ def main():
     train_loader, test_loader = create_data_loaders(X, y, batch_size=32, train_split=0.8)
     
     # Define model parameters
-    input_dim = 1152      
+    input_dim = 576      
     hidden_dim = 256     
     num_classes = 37     
     model_classifier = ClassifierNet(input_dim, hidden_dim, num_classes)
