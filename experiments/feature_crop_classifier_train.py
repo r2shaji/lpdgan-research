@@ -117,11 +117,11 @@ def crop_features(feature_map, bbox, output_size=(10, 10)):
     print("cropped_feature_height, cropped_feature_width",cropped_feature_height, cropped_feature_width)
     if cropped_feature_width == 0 or cropped_feature_height == 0:
         if cropped_feature_width == 0:
-            xmin_feat = xmin_feat-1 if xmin_feat>=0 else 0
-            xmax_feat = xmax_feat+1 if xmax_feat<=width else width
+            xmin_feat = xmin_feat-1 if xmin_feat>0 else 0
+            xmax_feat = xmax_feat+1 if xmax_feat<width else width
         if cropped_feature_height == 0:
-            ymin_feat = ymin_feat-1 if ymin_feat>=0 else 0
-            ymax_feat = ymax_feat+1 if ymax_feat<=height else height
+            ymin_feat = ymin_feat-1 if ymin_feat>0 else 0
+            ymax_feat = ymax_feat+1 if ymax_feat<height else height
         cropped_feature = feature_map[:, :, ymin_feat:ymax_feat, xmin_feat:xmax_feat]
     
     return cropped_feature
